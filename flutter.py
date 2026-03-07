@@ -57,8 +57,8 @@ class flutter:
         except asyncio.CancelledError as e:
             raise e
         finally:
-            self._led.off()
             if self._blink_lock.locked():
+                self._led.off()
                 self._blink_lock.release()
 
     async def _blink(self, period_ms = 7500, rate_ms = 750, override = False):
