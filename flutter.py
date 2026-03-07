@@ -24,8 +24,13 @@ import uasyncio as asyncio
 from utime import ticks_ms, ticks_diff
 from machine import Pin
 
+
 class flutter:
     REFRESH_RATE = 250 # ms
+    PERIOD_INFINITE = -1
+    RATE_CONSTANT_ON = 0
+    RATE_CONSTANT_OFF = -1
+    
     def __init__(self, led_pin = Pin("LED", Pin.OUT, value=0)):
         self._led = led_pin
         self._current_tasks = collections.deque((), 16)
@@ -39,13 +44,13 @@ class flutter:
             await self._blink_lock.acquire()
             self._led.off()
             begin_ticks = ticks_ms()
-            while ticks_diff(ticks_ms(), begin_ticks) < period_ms or period_ms == -1:
-                if rate_ms == 0:
+            while ticks_diff(ticks_ms(), begin_ticks) < period_ms or period_ms == flutter.PERIOD_INFINITE:
+                if rate_ms == flutter.RATE_CONSTANT_ON:
                         self._led.on()
-                        await asyncio.sleep_ms(period_ms if period_ms != -1 else flutter.REFRESH_RATE)
-                elif rate_ms == -1:
+                        await asyncio.sleep_ms(period_ms if period_ms != flutter.PERIOD_INFINITE else flutter.REFRESH_RATE)
+                elif rate_ms == flutter.RATE_CONSTANT_OFF:
                     self._led.off()
-                    await asyncio.sleep_ms(period_ms if period_ms != -1 else flutter.REFRESH_RATE)
+                    await asyncio.sleep_ms(period_ms if period_ms != flutter.PERIOD_INFINITE else flutter.REFRESH_RATE)
                 else:
                     self._led.toggle()
                     await asyncio.sleep_ms(rate_ms)
@@ -77,8 +82,11 @@ class flutter:
     def blink(self, period_ms = 7500, rate_ms = 750, override = False):
         asyncio.create_task(self._blink(period_ms, rate_ms, override))
 
-    def on(self):
-        asyncio.create_task(self._blink(-1, 0, True))
+    def on(self, period_ms = -1, override = False):
+        asyncio.create_task(self._blink(period_ms, flutter.RATE_CONSTANT_ON, override))
+
+    def off(self, period_ms = -1, override = False):
+        asyncio.create_task(self._blink(period_ms, flutter.RATE_CONSTANT_OFF, override))
 
     def cancel(self):
         asyncio.create_task(self._blink(0, 0, True))
@@ -94,18 +102,18 @@ async def test():
     onboard_led = flutter()
     # blink some morse code
     onboard_led.blink(1500, 300)
-    onboard_led.blink(3000, -1)
+    onboard_led.off(3000)
     onboard_led.blink(3000, 700)
-    onboard_led.blink(3000, -1)
+    onboard_led.off(3000)
     onboard_led.blink(1500, 300)
-    onboard_led.blink(3000, -1)
-    # near end, cancel 
+    onboard_led.off(3000)
     await asyncio.sleep(14)
-    onboard_led.blink(-1, 100, True)
+    onboard_led.blink(flutter.PERIOD_INFINITE, 100, True)
     await asyncio.sleep(5)
-    onboard_led.on()
-    await asyncio.sleep(5)
+    onboard_led.on(override=True)
+    await asyncio.sleep(7)
     onboard_led.cancel()
+    await asyncio.sleep(1)
     onboard_led.blink(3000, 300, True)
     await asyncio.sleep(5)
     reset()
