@@ -1,5 +1,5 @@
 # Released under the MIT License (MIT)
-# Copyright (c) 2014 adversarial
+# Copyright (c) 2026 adversarial
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -27,64 +27,64 @@ from machine import Pin
 class flutter:
     REFRESH_RATE = 250 # ms
     def __init__(self, led_pin = Pin("LED", Pin.OUT, value=0)):
-        self.led = led_pin
-        self.current_tasks = collections.deque((), 16)
-        self.blink_lock = asyncio.Lock()
-        self.schedule_lock = asyncio.Lock()
+        self._led = led_pin
+        self._current_tasks = collections.deque((), 16)
+        self._blink_lock = asyncio.Lock()
+        self._schedule_lock = asyncio.Lock()
  
 # period_ms: amount of time to blink light, should be lower than TICKS_MAX (undocumented)
 # rate_ms: how often to toggle light
     async def _blink_task(self, period_ms, rate_ms):
         try:
-            await self.blink_lock.acquire()
-            self.led.off()
+            await self._blink_lock.acquire()
+            self._led.off()
             begin_ticks = ticks_ms()
             while ticks_diff(ticks_ms(), begin_ticks) < period_ms or period_ms == -1:
                 if rate_ms == 0:
-                        self.led.on()
+                        self._led.on()
                         await asyncio.sleep_ms(period_ms if period_ms != -1 else flutter.REFRESH_RATE)
                 elif rate_ms == -1:
-                    self.led.off()
+                    self._led.off()
                     await asyncio.sleep_ms(period_ms if period_ms != -1 else flutter.REFRESH_RATE)
                 else:
-                    self.led.toggle()
+                    self._led.toggle()
                     await asyncio.sleep_ms(rate_ms)
         except asyncio.CancelledError as e:
             raise e
         finally:
-            self.led.off()
-            if self.blink_lock.locked():
-                self.blink_lock.release()
+            self._led.off()
+            if self._blink_lock.locked():
+                self._blink_lock.release()
 
-    async def _blink_led(self, period_ms = 7500, rate_ms = 750, override = False):
+    async def _blink(self, period_ms = 7500, rate_ms = 750, override = False):
         
         try:
-            await self.schedule_lock.acquire()
-            if override == True and len(self.current_tasks):
-                for _ in range(0, len(self.current_tasks)):
-                    t = self.current_tasks.pop()
+            await self._schedule_lock.acquire()
+            if override == True and len(self._current_tasks):
+                for _ in range(0, len(self._current_tasks)):
+                    t = self._current_tasks.pop()
                     t.cancel()
             if not period_ms:
                 return
             # task is not guaranteed to execute immediately
             new_task = asyncio.create_task(self._blink_task(period_ms, rate_ms))
             await asyncio.sleep(0) # allow task switch
-            self.current_tasks.appendleft(new_task)
+            self._current_tasks.appendleft(new_task)
         finally:
-            if self.schedule_lock.locked():
-                self.schedule_lock.release()
+            if self._schedule_lock.locked():
+                self._schedule_lock.release()
 
-    def blink_led(self, period_ms = 7500, rate_ms = 750, override = False):
-        asyncio.create_task(self._blink_led(period_ms, rate_ms, override))
+    def blink(self, period_ms = 7500, rate_ms = 750, override = False):
+        asyncio.create_task(self._blink(period_ms, rate_ms, override))
 
     def on(self):
-        asyncio.create_task(self._blink_led(-1, 0, True))
+        asyncio.create_task(self._blink(-1, 0, True))
 
     def cancel(self):
-        asyncio.create_task(self._blink_led(0, 0, True))
+        asyncio.create_task(self._blink(0, 0, True))
 
     def tasks(self):
-        return self.current_tasks
+        return self._current_tasks
     
 # #test included:
 
@@ -92,23 +92,21 @@ async def test():
     from machine import reset
     
     onboard_led = flutter()
-# blink some morse code
-    onboard_led.blink_led(1500, 300)
-    onboard_led.blink_led(3000, -1)
-    onboard_led.blink_led(3000, 700)
-    onboard_led.blink_led(3000, -1)
-    onboard_led.blink_led(1500, 300)
-    onboard_led.blink_led(3000, -1)
-# near end, cancel 
+    # blink some morse code
+    onboard_led.blink(1500, 300)
+    onboard_led.blink(3000, -1)
+    onboard_led.blink(3000, 700)
+    onboard_led.blink(3000, -1)
+    onboard_led.blink(1500, 300)
+    onboard_led.blink(3000, -1)
+    # near end, cancel 
     await asyncio.sleep(14)
-# blink rapidly forever
-    onboard_led.blink_led(-1, 100, override=True)
+    onboard_led.blink(-1, 100, True)
     await asyncio.sleep(5)
-# constant light
     onboard_led.on()
     await asyncio.sleep(5)
-# one last blink
-    onboard_led.blink_led(3000, 300, True)
+    onboard_led.cancel()
+    onboard_led.blink(3000, 300, True)
     await asyncio.sleep(5)
     reset()
 
