@@ -94,7 +94,7 @@ class flutter_morse(flutter):
                 self._blink_lock.release()
 
     async def _blink(self, phrase = "sos", wpm = 20, count = 1, override = False):
-        
+        morse_phrase = [morse_character(c) for c in phrase if c in morse_character.alphabet]
         try:
             await self._schedule_lock.acquire()
             if override == True:
@@ -102,7 +102,7 @@ class flutter_morse(flutter):
             if not count:
                 return
             # task is not guaranteed to execute immediately
-            new_task = asyncio.create_task(self._blink_task(phrase, wpm, count))
+            new_task = asyncio.create_task(self._blink_task(morse_phrase, wpm, count))
             await asyncio.sleep(0) # allow task switch maybe
             self._current_tasks.appendleft(new_task)
         finally:
